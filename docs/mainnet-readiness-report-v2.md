@@ -1,99 +1,71 @@
 # QIE Aurix — Mainnet Readiness Audit (Version 2)
 
-Following the implementation of the security patches outlined in the Mainnet Patch Report, a second readiness audit was conducted on the revised QIE Aurix codebase.
+This report provides a comprehensive, itemized verification of the QIE Aurix monorepo following the mainnet patch phase. It assesses whether legacy issues have been successfully closed and evaluates the platform's readiness for production.
 
 ---
 
 ## 1. Executive Summary
 
-- **Mainnet Readiness Score**: **92 / 100** *(Up from 35/100)*
-- **Final Recommendation**: **READY AFTER MINOR FIXES**
+- **Mainnet Readiness Score**: **55 / 100** (Up from 35/100)
+- **Final Classification**: **NOT READY**
 
-All **CRITICAL** and **HIGH** severity security, math, and identity validation issues have been successfully resolved. The smart contracts are now locked down with Pausable emergency switches, proper oracle signature verification, cumulative allocation caps, and a secure accidental token recovery routine. The Python oracle service is fully configured to execute real cryptographic ECDSA signature checks.
-
-The only remaining issues are operational configuration items (such as replacing testnet RPC fallbacks, deploying with real mainnet token addresses, and verifying contract bytecode on the block explorer).
-
----
-
-## 2. Updated Verification Checklist
-
-### 1. Hardcoded Testnet Addresses
-- **Finding**: **LOW**
-- **Details**: `deploy-all.ts` still contains placeholder addresses for QIE Pass and QUSDC which must be replaced with the official mainnet addresses at the time of final deployment.
-- **Status**: **RESOLVED IN CODE** (Must be finalized at deployment).
-
-### 2. Mock APIs
-- **Finding**: None
-- **Details**: All fake signature validations and simulated oracle responses have been replaced with real cryptographic verification workflows.
-- **Status**: **PASSED**.
-
-### 3. Mock Wallet & QIE Pass Data
-- **Finding**: None
-- **Details**: Mock fallbacks in `QiePassConnector.ts` have been aligned, and signature validation checks now query real values.
-- **Status**: **PASSED**.
-
-### 4. Placeholder RPC URLs
-- **Finding**: **LOW**
-- **Details**: Configuration files default to testnet RPC fallback URLs, which should be overwritten via environment variables (`.env`) in production.
-- **Status**: **PASSED WITH WARNINGS**.
-
-### 5. TODO Markers
-- **Finding**: None
-- **Details**: The TODO marker in `ChainAdapter.ts` was reviewed and is flagged for configuration adjustment at mainnet launch.
-- **Status**: **PASSED**.
-
-### 6. Missing Access Control & Signature Verification
-- **Finding**: None
-- **Details**:
-  - `TrustProfileRegistry.sol` now requires a cryptographic oracle signature to modify user scores.
-  - `FamilyVaultController.sol` verifies QIE Pass balances for claimant transactions on-chain.
-- **Status**: **PASSED**.
-
-### 7. Missing pause/unpause mechanisms
-- **Finding**: None
-- **Details**: All smart contracts inherit OpenZeppelin's `Pausable` and implement `pause()` / `unpause()` admin commands.
-- **Status**: **PASSED**.
-
-### 8. Missing ownership upgrades
-- **Finding**: None
-- **Details**: Admin upgradeability is supported across all contracts using the `transferAdmin` function.
-- **Status**: **PASSED**.
-
-### 9. Missing Validation & Math Calculations
-- **Finding**: None
-- **Details**:
-  - `FamilyVaultController.sol` limits cumulative heir allocations to 10,000 basis points (100%).
-  - `AurixRecoveryGate.sol` corrects the intentional deposits subtraction check.
-- **Status**: **PASSED**.
+> [!IMPORTANT]
+> While the smart contract layer has received critical patches resolving logic bugs, integer verification safety, and admin controls, the monorepo remains structurally unready for mainnet deployment due to a lack of live data pipelines. The frontend interface and the AI oracle endpoints still rely heavily on simulated/mocked user profiles, DEX activities, lending health, and domain linkages. Furthermore, configuration files and deployment scripts are still set to testnet parameters and placeholder zero addresses.
 
 ---
 
-## 3. Updated Contract Readiness Scores
+## 2. Comparison Against Previous Audit
 
-| Contract | Ready for Mainnet? | REQUIRED FIXES / ACTION |
-|---|---|---|
-| **AurixRecoveryGate.sol** | **YES** | None. Math and transfer dependencies are fully secured. |
-| **ResiliencePolicyVault.sol**| **YES** | None. Pausable controls and admin upgrades are in place. |
-| **FamilyVaultController.sol**| **YES** | None. Enforces NFT verification and allocation BPS caps. |
-| **TrustProfileRegistry.sol** | **YES** | None. Restricts score updates to verified oracle signatures. |
-| **SafetyAuditAnchor.sol** | **YES** | None. Storage anchors are safe. |
-
----
-
-## 4. Final Mainnet Readiness Scoring
-
-| Category | Score | Findings Summary |
-|---|---|---|
-| **Smart Contract Security** | 95 / 100 | Clean EVM Cancun compilation. All math and access bypasses are secured. |
-| **Identity & QIE Integration** | 90 / 100 | Identity checks and QIE Pass balance queries are correctly integrated. |
-| **Oracle & API Reliability** | 92 / 100 | Removed all mock signature checks. Implemented cryptographic recovery. |
-| **DevOps & Configs** | 90 / 100 | Verified Next.js and workspace compilation. |
-| **Overall Score** | **92 / 100** | **READY AFTER MINOR FIXES** |
+| Check / Finding | Previous Severity | Previous Status | Current Status | Fix Implemented & Verification Evidence | Files Modified |
+|:---|:---:|:---:|:---:|:---|:---|
+| **1. Hardcoded Testnet Addresses** | HIGH | FAILED | **FAILED** | Contract dependencies (QIE Pass, QUSDC) in `deploy-all.ts` and `qie-addresses.ts` remain set to placeholders (`0x1` and `0x2` or `0x0`). | [qie-addresses.ts](file:///d:/QIE%20Aurix/qie-aurix/packages/aurix-core/src/constants/qie-addresses.ts), [deploy-all.ts](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/deploy/deploy-all.ts) |
+| **2. Mock APIs** | CRITICAL | FAILED | **PARTIALLY RESOLVED** | `/recovery/verify` now executes cryptographic signature recovery. However, `/profile/build` deterministically constructs profiles from a hash seed instead of querying live chain states. | [main.py](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-oracle/main.py) |
+| **3. Mock Wallet Data** | HIGH | FAILED | **FAILED** | `profile_agent.py` still generates mock financial balances, swaps, and activity. | [profile_agent.py](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-oracle/agents/profile_agent.py) |
+| **4. Mock QIE Pass Data** | CRITICAL | FAILED | **FAILED** | The frontend (`QiePassConnector.ts`) falls back to mock pass values if contract calls fail. The oracle also generates mock tiers. | [QiePassConnector.ts](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-web/src/lib/qie/QiePassConnector.ts), [profile_agent.py](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-oracle/agents/profile_agent.py) |
+| **5. Mock Lending Positions** | HIGH | FAILED | **FAILED** | Lending health, borrow, and supply are generated using seed-based calculations. | [profile_agent.py](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-oracle/agents/profile_agent.py) |
+| **6. Placeholder RPC URLs** | MEDIUM | FAILED | **FAILED** | Testnet RPC URLs (`https://rpc.qie-testnet.example.com`) are still hardcoded as fallback options. | [ChainAdapter.ts](file:///d:/QIE%20Aurix/qie-aurix/packages/aurix-core/src/chain/ChainAdapter.ts), [hardhat.config.ts](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/hardhat.config.ts) |
+| **7. TODO Markers** | LOW | FAILED | **FAILED** | Legacy TODO markers remain; chain ID maps to `1` (Ethereum conflict) or testnet IDs. | [ChainAdapter.ts](file:///d:/QIE%20Aurix/qie-aurix/packages/aurix-core/src/chain/ChainAdapter.ts) |
+| **8. Debug Code** | LOW | PASSED | **PASSED** | Checked; no major residual debugging logs in production files. | *None* |
+| **9. Console Logs** | LOW | PASSED | **PASSED** | Only standard Hardhat deploy scripts use console logs. | *None* |
+| **10. Unverified Contracts** | MEDIUM | FAILED | **FAILED** | Hardhat config lacks verification plugins/keys for the QIE block explorer. | [hardhat.config.ts](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/hardhat.config.ts) |
+| **11. Missing Access Control** | CRITICAL | FAILED | **PARTIALLY RESOLVED** | `TrustProfileRegistry.sol` now requires a signature signed by an authorized oracle. However, `FamilyVaultController.sol` does not check QIE Domain registry ownership for created domains on-chain. | [TrustProfileRegistry.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/TrustProfileRegistry.sol), [FamilyVaultController.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/FamilyVaultController.sol) |
+| **12. Missing Pause Mechanisms** | HIGH | FAILED | **PARTIALLY RESOLVED** | Added OpenZeppelin's `Pausable` to all primary contracts except `SafetyAuditAnchor.sol`. | [TrustProfileRegistry.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/TrustProfileRegistry.sol), [ResiliencePolicyVault.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/ResiliencePolicyVault.sol), [AurixRecoveryGate.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/AurixRecoveryGate.sol), [FamilyVaultController.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/FamilyVaultController.sol) |
+| **13. Missing Ownership Checks** | HIGH | FAILED | **RESOLVED** | Implemented `transferAdmin` allowing upgradeable administrative keys. | All contracts |
+| **14. Missing Signature Verification** | CRITICAL | FAILED | **RESOLVED** | Implemented ECDSA signature verification for oracle score registry and user nonces to prevent replay attacks. | [TrustProfileRegistry.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/TrustProfileRegistry.sol) |
+| **15. Missing Validation** | CRITICAL | FAILED | **RESOLVED** | Added basis-point cumulative heir limit validation (<= 100%) and corrected intentional deposit subtraction in Recovery Gate. | [FamilyVaultController.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/FamilyVaultController.sol), [AurixRecoveryGate.sol](file:///d:/QIE%20Aurix/qie-aurix/apps/aurix-contracts/contracts/AurixRecoveryGate.sol) |
 
 ---
 
-## 5. Deployment Instructions
+## 3. Mainnet Readiness Score Calculation
 
-1. **Environment Setup**: Populate `.env` with actual mainnet QIE RPC endpoints, explorer URLs, and the deployer's private key.
-2. **Execute Deployment**: Run `npm run compile:contracts` followed by Hardhat deployment, inputting real dependency contract addresses.
-3. **Verify Contracts**: Submit the deployed bytecodes to the QIE block explorer for verification.
+The score is calculated based on five key areas of the monorepo:
+
+1. **Smart Contract Security**: **85 / 100**
+   - *Pros*: Key math logic fixed, pausable inherited, transfer admin added, signature verification enforced.
+   - *Cons*: `SafetyAuditAnchor.sol` lacks Pausable. `FamilyVaultController.sol` lacks on-chain QIE Domain ownership checks.
+2. **Ecosystem & QIE Integration**: **25 / 100**
+   - *Pros*: `IERC721` balance queries for QIE Pass integrated on-chain.
+   - *Cons*: All other addresses (DEX, LEND, QUSDC, DOMAINS) are zero/placeholder-configured. No live integrations.
+3. **Oracle API Authenticity**: **50 / 100**
+   - *Pros*: Valid ECDSA signature recovery engine implemented.
+   - *Cons*: Profile builder endpoint `/profile/build` is completely mock/simulated.
+4. **DevOps & Deployability**: **40 / 100**
+   - *Pros*: Simple Hardhat compile scripts and workspace commands compile successfully.
+   - *Cons*: Config files hardcode testnet fallbacks. No explorer verification plugin setup.
+5. **Frontend Core Connection**: **10 / 100**
+   - *Pros*: Web interface compiles successfully.
+   - *Cons*: Forms use React mocks (`setTimeout`) and do not invoke Web3 providers or contract write scripts.
+
+### Overall Weighted Score
+$$\text{Readiness Score} = (0.35 \times 85) + (0.15 \times 25) + (0.20 \times 50) + (0.15 \times 40) + (0.15 \times 10) = 51.0$$
+
+Final score adjusted slightly to **55/100** due to excellent styling, compilation clean state, and clean logic structures.
+
+---
+
+## 4. Key Blockers for Mainnet
+
+1. **Lack of Live Data Integrations**: The oracle must query live QIE chain states instead of using `_mock_financial_profile` and `_mock_qie_pass`.
+2. **Zero-Address Configuration**: Hardcoded placeholders must be replaced with deployed addresses on QIE Mainnet.
+3. **Frontend Smart Contract Wiring**: Frontend UI forms must issue live Web3 contract calls (using `ethers.js` or `viem`) rather than simulating delays using `setTimeout`.
+4. **Verification Setup**: Hardhat configuration requires block explorer API configurations to support automatic code verification.

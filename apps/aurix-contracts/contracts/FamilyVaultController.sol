@@ -23,6 +23,10 @@ interface IAurixRecoveryGate {
     function notifyReleased(bytes32 claimId) external;
 }
 
+interface IQieDomainsResolver {
+    function resolveDomain(string calldata domain) external view returns (address);
+}
+
 /**
  * @title FamilyVaultController
  * @author QIE Aurix Protocol
@@ -66,6 +70,7 @@ contract FamilyVaultController is ReentrancyGuard, Pausable {
     mapping(string => bytes32)    private _domainToVaultId;                // domain → vaultId
 
     address public qiePassContract;
+    address public qieDomainsResolver;
     address public admin;
 
     uint256 public vaultCount;
@@ -129,6 +134,11 @@ contract FamilyVaultController is ReentrancyGuard, Pausable {
         uint16          timeLockDays
     ) external whenNotPaused returns (bytes32 vaultId) {
         if (_domainToVaultId[domainName] != bytes32(0)) revert DomainAlreadyTaken();
+
+        if (qieDomainsResolver != address(0)) {
+            address resolved = IQieDomainsResolver(qieDomainsResolver).resolveDomain(domainName);
+            if (resolved != address(0) && resolved != msg.sender) revert Unauthorized();
+        }
 
         vaultId = keccak256(abi.encodePacked(msg.sender, domainName, block.timestamp));
 
@@ -258,6 +268,10 @@ contract FamilyVaultController is ReentrancyGuard, Pausable {
 
     function setQiePassContract(address pass) external onlyAdmin {
         qiePassContract = pass;
+    }
+
+    function setQieDomainsResolver(address resolver) external onlyAdmin {
+        qieDomainsResolver = resolver;
     }
 
     function transferAdmin(address newAdmin) external onlyAdmin {
